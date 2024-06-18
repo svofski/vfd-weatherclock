@@ -1,0 +1,6 @@
+Install async package v3
+
+import mip
+mip.install("github:peterhinch/micropython-async/v3/primitives")
+mip.install("github:peterhinch/micropython-async/v3/threadsafe")
+
