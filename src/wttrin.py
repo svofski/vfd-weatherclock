@@ -68,9 +68,3 @@ class Weatherman:
     def isrunning(self):
         with self._lock:
             return self._running
-        
-#w = Weatherman('Batumi')
-#w.request()
-
-#print(w._weather)
-#print(w.get('feelslike'))

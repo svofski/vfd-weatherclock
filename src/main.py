@@ -2,11 +2,11 @@
 # fix dot display (50.7mm)
 # fix V glyph, it looks like Y
 
-import connect_wifi
+#import connect_wifi
 from neopixel import NeoPixel
 from machine import Pin, Timer, SPI
 from utime import sleep
-from pt6315 import PT6315
+from pt6315 import PT6315, VFD
 import time, asyncio, ntptime, random
 
 import util
@@ -29,11 +29,12 @@ LOCATION='batumi' # 'stephenville'
 time_is_set = False
 status_led = NeoPixel(Pin(10), 1) # pin 10, 1x ws2812
 
+from wifi_manager import WifiManager
+wifi = WifiManager(ssid="vfdclock", password="vfdclock", debug=True)
+
 def set_status(rgb):
     status_led[0] = (rgb[1], rgb[0], rgb[2])
     status_led.write()
-
-wifi = connect_wifi.connect_wifi()
 
 class Flasher:
     _flash = 0
@@ -53,7 +54,8 @@ flasher = Flasher()
 
 hspi = SPI(1, baudrate=SPICLK, firstbit=SPI.LSB, sck=Pin(6), mosi=Pin(7), miso=Pin(8))
 vfd_cs = Pin(9, mode=Pin.OUT, value=1)
-vfd = PT6315(hspi, pin_cs=vfd_cs)
+vfd_drv = PT6315(hspi, pin_cs=vfd_cs)
+vfd = VFD(vfd_drv)
 
 sleep(0.25)
 
@@ -61,7 +63,7 @@ vfd.begin()
 vfd.setDisplay(True)
 vfd.setBrightness(1)
 
-vfd.vfd_cls()
+vfd.cls()
 
 vfd_status = [0, 0, 0]
 
@@ -82,26 +84,26 @@ def vfd_wifi_status(on):
         vfd_status[1] |= VFD_STATUS_WIFI
     else:
         vfd_status[1] &= ~VFD_STATUS_WIFI
-    vfd.vfd_direct(6, vfd_status)
+    vfd.direct(6, vfd_status)
 
 def vfd_weather_status(on):
     if on:
         vfd_status[1] |= VFD_STATUS_3D
     else:
         vfd_status[1] &= ~VFD_STATUS_3D
-    vfd.vfd_direct(6, vfd_status)
+    vfd.direct(6, vfd_status)
 
 def vfd_access_indicator(on):
     if on:
         vfd_status[1] |= VFD_STATUS_CLOCK
     else:
         vfd_status[1] &= ~VFD_STATUS_CLOCK
-    vfd.vfd_direct(6, vfd_status)
+    vfd.direct(6, vfd_status)
     
 def vfd_wtf(glyph):
     vfd_status[0] = glyph & 255
     vfd_status[1] = (vfd_status[1] & 0xfe) | ((glyph >> 8) & 1)
-    vfd.vfd_direct(6, vfd_status)
+    vfd.direct(6, vfd_status)
 
 class VFDStatus:
     _statusbit = 0
@@ -110,12 +112,12 @@ class VFDStatus:
         
     def __enter__(self):
         vfd_status[1] |= self._statusbit
-        vfd.vfd_direct(6, vfd_status)
+        vfd.direct(6, vfd_status)
         return self
         
     def __exit__(self, *args):
         vfd_status[1] &= ~self._statusbit
-        vfd.vfd_direct(6, vfd_status)
+        vfd.direct(6, vfd_status)
         return False
 
 
@@ -127,6 +129,8 @@ def status_led_cb(s):
         set_status((0,1,0))
 
 flasher.callback = status_led_cb
+
+wifi.connect_threaded()
 
 report_queue = Queue()		# messages
 
@@ -164,7 +168,7 @@ async def at_printtask():
                     timestr = '\014%02d%c%02d' % (dtime[3],sep,dtime[4])
                 else:
                     timestr = f'\014--{sep}--'
-                vfd.vfd_puts(timestr)
+                vfd.puts(timestr)
                 
                 vfd.setBrightness(1 if dtime[3] < 9 else 2)
             await asyncio.sleep(0.05)
@@ -184,22 +188,22 @@ async def at_printtask():
                     state = 0
                 else:
                     if c == '~':
-                        vfd.vfd_flush()
+                        vfd.flush()
                         await asyncio.sleep(1)
                     elif c == '#':
-                        vfd.vfd_flush()
+                        vfd.flush()
                         await asyncio.sleep(0.1)
                     elif c == '\001':
                         pace = SCROLL_PACE if pace == 0 else 0
                     elif c == '\002':
                         state = 1
                     else:
-                        vfd.vfd_putchar(c)
+                        vfd.putchar(c)
                         if pace > 0 or ord(c) < 32:
-                            vfd.vfd_flush()
+                            vfd.flush()
                         if pace > 0:
                             await asyncio.sleep(pace)
-            vfd.vfd_flush()
+            vfd.flush()
         
 def blink(s, n):
     ret = ''
@@ -260,6 +264,19 @@ async def at_weather_requester():
         else:
             await asyncio.sleep(1)
             
+async def at_wifi_reporter():
+    while True:
+        if not wifi.isconnected():
+            #msg = f"\001CONNECTING.....\001"
+            if wifi.message != None and wifi.message != '':                
+                await report_queue.put(f"\001{wifi.message}...\001")
+                await asyncio.sleep(len(wifi.message)*0.2 + 2)
+            else:
+                await asyncio.sleep(0.2)
+        else:
+            await asyncio.sleep(5)
+        
+            
 ping_hosts=[('caglrc.cc', 'krtek'), ('sensi.org', 'sensi'), ('hackaday.io', 'had.io')]
 ping_times=[0] * len(ping_hosts)
 
@@ -309,6 +326,7 @@ async def at_ping_reporter():
 
 async def at_main(duration):
     asyncio.create_task(at_printtask())
+    asyncio.create_task(at_wifi_reporter())
     asyncio.create_task(at_timesync())
     asyncio.create_task(at_weather_reporter())
     asyncio.create_task(at_weather_requester())

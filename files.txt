@@ -2,10 +2,11 @@ boot.py
 connect_wifi.py
 font.py
 main.py
-network.txt
+microDNSSrv.py
 pt6315.py
 uping.py
 util.py
 webrepl_cfg.py
+wifi_manager.py
 wttrin.py
-
+futaba_8md06inkm.py
