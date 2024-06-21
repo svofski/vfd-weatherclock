@@ -1,5 +1,6 @@
 import requests
 import _thread
+import gc
 
 WTTR = 'https://wttr.in'
 NAMES = ['temperature', 'feelslike', 'condition', 'humidity', 'wind', 'precipitation', 'pressure', 'uv', 'moon']
@@ -18,13 +19,12 @@ MOON_PHASES_TEXT = (
 WIND_DIRECTION = ("↓", "↙", "←", "↖", "↑", "↗", "→", "↘")
 
 class Weatherman:
-    _location = 'Earth' # Earth, Texas
     _lock = None
     _weather = {}
     _running = False
+    _location = 'Earth'
     
-    def __init__(self, location):
-        self._location = location
+    def __init__(self):
         self._lock = _thread.allocate_lock()
         
     def request_threadproc(self):
@@ -40,11 +40,12 @@ class Weatherman:
         
         with self._lock:
             self._running = False            
-            
     
-    def request(self):
+    def request(self, location):
+        gc.collect()
         with self._lock:
             if not self._running:
+                self._location = location
                 self._running = True
                 _thread.start_new_thread(self.request_threadproc, ())
                 return True

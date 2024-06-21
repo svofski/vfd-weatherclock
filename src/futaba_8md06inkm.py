@@ -25,6 +25,11 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 '''
 
+'''
+https://github.com/Reboot93/MicroPython-8MD-06INKM-display-driver/
+'''
+
+
 import framebuf
 from micropython import const
 
@@ -46,7 +51,8 @@ class VFD(framebuf.FrameBuffer):
         self.dimming = dimming
         res.init(res.OUT, value=0)
         cs.init(cs.OUT, value=1)
-        en.init(en.OUT, value=1)
+        if en != None:
+            en.init(en.OUT, value=1)
 
         self.spi = spi
         self.res = res

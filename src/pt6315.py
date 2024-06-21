@@ -78,12 +78,12 @@ def clamp(x, l, u):
     return l if x < l else u if x > u else x
 
 
-class VFD:
+class Term:
     def __init__(self, drv):
         self._drv = drv
         
-    def cls(self, nchars=PT6315_DISPLAY_MEM_SZ):
-        self._drv.cls(nchars)
+    def cls(self, flush=True, nchars=PT6315_DISPLAY_MEM_SZ):
+        self._drv.cls(flush=flush, nchars=nchars)
 
     def flush(self):
         self._drv.flush()
@@ -92,7 +92,7 @@ class VFD:
         self._drv.setpos(0)
 
     def pos(self) -> int:
-        return self._cursoraddr // 3
+        return self._drv.pos()
     
     # write glyph (3 bytes) directly at position pos
     def direct(self, pos, glyph):
@@ -106,7 +106,7 @@ class VFD:
             self._drv.cls()
             return
         elif c == '\010': # ^H backspace
-            self.setpos(self.pos() - 1)
+            self._drv.setpos(self.pos() - 1)
             return
         
         # auto scroll
@@ -197,10 +197,11 @@ class PT6315:
         finally:
             self.pin_cs(1)
 
-    def cls(self, nchars=PT6315_DISPLAY_MEM_SZ):
+    def cls(self, flush=False, nchars=PT6315_DISPLAY_MEM_SZ):
         self._displaymem[0:VFD_NCHARS * 3] = bytearray([0] * (VFD_NCHARS * 3))
         self.setpos(0)
-        self.flush()
+        if flush:
+            self.flush()
 
     def putglyph(self, glyph):
         self._lastaddr = self._cursoraddr
@@ -220,4 +221,8 @@ class PT6315:
         self._cursoraddr = self._leftpadding * 3 + pos * 3
         self._cursoraddr = clamp(self._cursoraddr, 0, len(self._displaymem) - 1)
         self._lastaddr = self._cursoraddr
+        
+    def pos(self):
+        return self._cursoraddr // 3
+        
 

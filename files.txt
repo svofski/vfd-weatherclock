@@ -1,6 +1,9 @@
 boot.py
+boratcast_vfd.py
 connect_wifi.py
 font.py
+futaba_8md06inkm.py
+futaba_8md06inkm_term.py
 main.py
 microDNSSrv.py
 pt6315.py
@@ -9,4 +12,3 @@ util.py
 webrepl_cfg.py
 wifi_manager.py
 wttrin.py
-futaba_8md06inkm.py

@@ -15,6 +15,9 @@ from microDNSSrv import MicroDNSSrv
 class WifiManager:
     message = None
     mdns = None
+    city = 'Zzyzx'
+    timezone = 0
+    _is_serving = False
     
     def __init__(self, ssid = 'WifiManager', password = 'wifimanager', reboot = True, debug = False):
         self.wlan_sta = network.WLAN(network.STA_IF)
@@ -37,6 +40,7 @@ class WifiManager:
         # The file were the credentials will be stored.
         # There is no encryption, it's just a plain text archive. Be aware of this security problem!
         self.wifi_credentials = 'wifi.dat'
+        self.location_and_timezone = 'location_tz.dat'
         
         # Prevents the device from automatically trying to connect to the last saved network without first going through the steps defined in the code.
         self.wlan_sta.disconnect()
@@ -46,6 +50,7 @@ class WifiManager:
         self.reboot = reboot
         
         self.debug = debug
+        self.read_location()
 
 
     def connect(self):
@@ -57,6 +62,7 @@ class WifiManager:
             if ssid in profiles:
                 password = profiles[ssid]
                 if self.wifi_connect(ssid, password):
+                    _thread.stack_size(0)
                     return
         print('Could not connect to any WiFi network. Starting the configuration portal...')
         self.web_server()
@@ -72,6 +78,9 @@ class WifiManager:
 
     def isconnected(self):
         return self.wlan_sta.isconnected()
+    
+    def is_serving(self):
+        return self._is_serving
 
     def get_address(self):
         return self.wlan_sta.ifconfig()
@@ -100,6 +109,26 @@ class WifiManager:
             profiles[ssid] = password
         return profiles
 
+    def write_location(self, city, timezone):
+        with open(self.location_and_timezone, 'w') as file:
+            file.write(f'{city},{timezone}\n')
+            
+    def read_location(self):
+        try:
+            with open(self.location_and_timezone) as file:
+                lines = file.readlines()
+            for line in lines:
+                self.city, tzstr = line.strip().split(',')
+                try:
+                    self.timezone = int(tzstr)
+                except:
+                    pass
+                break                
+        except Exception as error:
+            if self.debug:
+                print('read_location: error=', error)
+            pass
+        return self.city, self.timezone
 
     def wifi_connect(self, ssid, password):
         print('Trying to connect to:', ssid)
@@ -140,7 +169,9 @@ class WifiManager:
                                         "www.apple.com" : myipstr})
         #self.mdns = MicroDNSSrv.Create({"*" : myipstr})
         
-        self.message = f'Connect to ##{self.ap_ssid}## pass ##{self.ap_password}## and open http://{self.wlan_ap.ifconfig()[0]}'
+        self._is_serving = True
+        
+        self.message = f'Connect to ##{self.ap_ssid}## pass ##{self.ap_password}## and open http://{self.wlan_ap.ifconfig()[0]}~'
         print(self.message)
         while True:
             if self.wlan_sta.isconnected():
@@ -243,6 +274,8 @@ class WifiManager:
             """.format(ssid))
         self.client.sendall("""
                         <p><label for="password">Password:&nbsp;</label><input type="password" id="password" name="password"></p>
+                        <p><label for="city">City:&nbsp;</label><input type="text" id="city" name="city"></p>
+                        <p><label for="timezone">Timezone:&nbsp;</label><input type="number" id="timezone" name="timezone" value="0"></p>
                         <p><input type="submit" value="Connect"></p>
                     </form>
                 </body>
@@ -252,15 +285,24 @@ class WifiManager:
 
 
     def handle_configure(self):
-        match = re.search('ssid=([^&]*)&password=(.*)', self.url_decode(self.request))
+        decoded_url = self.url_decode(self.request)
+        match = re.search('ssid=([^&]*)&password=(.*)&city=(.*)&timezone=(.*)', decoded_url)
         if match:
             ssid = match.group(1).decode('utf-8')
             password = match.group(2).decode('utf-8')
+            city = match.group(3).decode('utf-8')
+            timezone = match.group(4).decode('utf-8')
+            print(f'ssid={ssid} pass={password} city={city} timezone={timezone}')
             if len(ssid) == 0:
                 self.send_response("""
                     <p>SSID must be provided!</p>
                     <p>Go back and try again!</p>
                 """, 400)
+            elif len(city) == 0:# or timezone < -12 or timezone > 12:
+                self.send_response("""
+                    <p>City name and timezone in range [-12..+12] must be provided!</p>
+                    <p>Go back and try again!</p>
+                """, 400)                
             elif self.wifi_connect(ssid, password):
                 self.send_response("""
                     <p>Successfully connected to</p>
@@ -270,6 +312,7 @@ class WifiManager:
                 profiles = self.read_credentials()
                 profiles[ssid] = password
                 self.write_credentials(profiles)
+                self.write_location(city, timezone)
                 time.sleep(5)
             else:
                 self.send_response("""
@@ -283,8 +326,7 @@ class WifiManager:
                 <p>Parameters not found!</p>
             """, 400)
             time.sleep(5)
-
-
+            
     def handle_not_found(self):
         #self.send_response("""
         #    <p>Page not found!</p>
@@ -333,4 +375,5 @@ class WifiManager:
         return b''.join(res)
 
     def connect_threaded(self):
+        _thread.stack_size(8000)
         _thread.start_new_thread(self.connect, ())
