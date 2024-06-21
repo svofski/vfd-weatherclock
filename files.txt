@@ -12,3 +12,5 @@ util.py
 webrepl_cfg.py
 wifi_manager.py
 wttrin.py
+lib/asy_ntp_time.py
+lib/asy_udp_client.py
