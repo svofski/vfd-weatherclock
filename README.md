@@ -1,7 +1,7 @@
 # VFD weather clock
 
-Hardware: RP2040 Zero, VFD display (21-seg or dot matrix), wires and hot glue
+Hardware: RP2040 Zero, VFD display (21-seg with PT6315 or dot matrix Futaba 8-MD-06INKM), wires and hot glue.
 
-Software: same style ~ micropython.
+A coding experiment in micropython.
 
-
+![movie](doc/vfd-weatherclock-short.gif)
